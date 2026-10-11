@@ -20,7 +20,7 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
+html, body { overflow: hidden; height: 100%; }
 
 body {
   background: var(--bg);
@@ -38,8 +38,16 @@ body {
 #gl {
   position: fixed;
   inset: 0;
-  z-index: 0;
   pointer-events: none;
+}
+.gesture {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: opacity 0.6s ease;
 }
 
 /* ===== scanline + vignette overlay ===== */
@@ -279,3 +287,92 @@ h2 {
 
 .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.7s ease, transform 0.7s cubic-bezier(.2,.8,.2,1); }
 .reveal.in { opacity: 1; transform: none; }
+
+/* ===== zone panels (dalam ruang 3D) ===== */
+#gl .zone-panel, #gl .zone-label { pointer-events: auto; }
+
+.zone-panel {
+  width: min(400px, 82vw);
+  background: rgba(10, 12, 16, 0.88);
+  border: 1px solid var(--line-bright);
+  border-radius: 14px;
+  padding: 22px 24px;
+  backdrop-filter: blur(10px);
+  font-family: var(--sans);
+  animation: panel-in 0.55s cubic-bezier(.2,.8,.2,1);
+  max-height: 62vh;
+  overflow-y: auto;
+  margin-bottom: 70px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.zone-panel.wide { width: min(520px, 86vw); }
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(18px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+.panel-title { font-size: clamp(26px, 4vw, 42px); font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
+.panel-role { font-family: var(--mono); font-size: 11.5px; color: var(--green); letter-spacing: 1px; margin-top: 10px; }
+.panel-lede { color: var(--muted); font-size: 13.5px; line-height: 1.65; margin-top: 10px; }
+.panel-btns { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.panel-btns .btn { cursor: pointer; font: inherit; }
+.panel-hint { font-family: var(--mono); font-size: 9.5px; color: var(--muted); letter-spacing: 1.5px; margin-top: 16px; text-transform: uppercase; }
+
+.zone-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--zc, var(--green));
+  background: rgba(10, 12, 16, 0.7);
+  border: 1px solid var(--zc, var(--green));
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+.zone-label:hover { transform: scale(1.1); background: rgba(63, 185, 80, 0.12); }
+.zone-label.here { background: var(--zc, var(--green)); color: #0a0c10; font-weight: 700; }
+
+.proj-row {
+  display: flex; flex-direction: column; align-items: flex-start;
+  width: 100%;
+  background: rgba(13, 17, 23, 0.7);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--pa, var(--green));
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-top: 10px;
+  cursor: pointer;
+  color: var(--text);
+  text-align: left;
+  font-family: var(--mono);
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+.proj-row:hover { transform: translateX(4px); border-color: var(--line-bright); }
+.proj-row .id { font-size: 9.5px; letter-spacing: 2px; color: var(--pa, var(--green)); }
+.proj-row .t { font-size: 15px; font-weight: 700; color: var(--text); margin-top: 3px; }
+.proj-row .k { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+.proj-title { font-size: 24px; font-weight: 800; margin: 4px 0 2px; }
+.proj-kind { font-family: var(--mono); font-size: 10.5px; color: var(--muted); letter-spacing: 1px; }
+
+.hint {
+  position: fixed;
+  left: 50%; bottom: 74px;
+  transform: translateX(-50%);
+  z-index: 7;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--green);
+  background: rgba(10, 12, 16, 0.8);
+  border: 1px solid var(--green-dim);
+  border-radius: 8px;
+  padding: 8px 14px;
+  animation: panel-in 0.5s ease;
+  white-space: nowrap;
+}
+@media (max-width: 640px) { .hint { font-size: 8.5px; white-space: normal; max-width: 82vw; text-align: center; } }
+
+.labels { position: fixed; inset: 0; z-index: 7; pointer-events: none; }
+.labels .zone-label { position: absolute; left: 0; top: 0; display: none; }

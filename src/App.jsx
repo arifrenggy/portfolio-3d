@@ -1,138 +1,142 @@
-import { useState } from 'react';
-import Scene from './components/Scene.jsx';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Canvas } from '@react-three/fiber';
+import * as THREE from 'three';
 import Loader from './components/Loader.jsx';
-import { Cursor, Hud, Nav, Reveal, TerminalCard } from './components/Ui.jsx';
+import { Cursor, Hud } from './components/Ui.jsx';
+import { Panels } from './components/ZonePanels.jsx';
+import { input, tapAt, ZONES } from './three/input.js';
+import {
+  Sky, Planet, Shard, GridFloor, Core, Paths, Station,
+  ProjectObject, Beacon, CameraRig, Bridge, LabelProjector,
+} from './three/World.jsx';
 import { PROFILE } from './data/profile.js';
+
+/* Overlay input: drag = lihat sekeliling, tap = inspeksi objek 3D. */
+function useGestures() {
+  const el = useRef(null);
+  useEffect(() => {
+    const node = el.current;
+    if (!node) return;
+    let down = false, moved = false, sx = 0, sy = 0, lx = 0, ly = 0, t0 = 0;
+    const start = (e) => {
+      const p = e.touches ? e.touches[0] : e;
+      down = true; moved = false;
+      sx = lx = p.clientX; sy = ly = p.clientY; t0 = performance.now();
+    };
+    const move = (e) => {
+      if (!down) return;
+      const p = e.touches ? e.touches[0] : e;
+      const dx = p.clientX - lx, dy = p.clientY - ly;
+      lx = p.clientX; ly = p.clientY;
+      if (Math.abs(p.clientX - sx) + Math.abs(p.clientY - sy) > 8) moved = true;
+      input.yaw = THREE.MathUtils.clamp(input.yaw + dx * 0.0042, -1.15, 1.15);
+      input.pitch = THREE.MathUtils.clamp(input.pitch - dy * 0.0032, -0.55, 0.6);
+      e.preventDefault();
+    };
+    const end = (e) => {
+      if (!down) return;
+      down = false;
+      if (!moved && performance.now() - t0 < 400) {
+        tapAt((e.changedTouches ? e.changedTouches[0].clientX : e.clientX) / window.innerWidth * 2 - 1,
+              -((e.changedTouches ? e.changedTouches[0].clientY : e.clientY) / window.innerHeight * 2 - 1));
+      }
+    };
+    node.addEventListener('pointerdown', start);
+    node.addEventListener('pointermove', move, { passive: false });
+    node.addEventListener('pointerup', end);
+    node.addEventListener('pointercancel', end);
+    return () => {
+      node.removeEventListener('pointerdown', start);
+      node.removeEventListener('pointermove', move);
+      node.removeEventListener('pointerup', end);
+      node.removeEventListener('pointercancel', end);
+    };
+  }, []);
+  return el;
+}
+
+const NAV = Object.values(ZONES).map((z) => [z.id, z.label]);
 
 export default function App() {
   const [booted, setBooted] = useState(false);
+  const [zone, setZoneState] = useState('beranda');
+  const [arrived, setArrived] = useState(null);
+  const [project, setProject] = useState(null);
+  const [hint, setHint] = useState(false);
+  const gestureRef = useGestures();
+  const labelRefs = useRef({});
+
+  const setZone = useCallback((z) => {
+    setZoneState((prev) => {
+      if (prev !== z) { input.yaw = 0; input.pitch = 0; setProject(null); setArrived(null); }
+      return z;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!booted) return;
+    setHint(true);
+    const t = setTimeout(() => setHint(false), 6000);
+    return () => clearTimeout(t);
+  }, [booted]);
+
+  const projectObjs = PROFILE.projects.map((p, i) => ({
+    ...p,
+    phase: i * 1.4,
+    pos: [[-5.5, 1.9, -20.5], [-1.8, 2.6, -21.5], [1.8, 2.6, -21.5], [5.5, 1.9, -20.5]][i],
+  }));
 
   return (
     <>
       {!booted && <Loader onDone={() => setBooted(true)} />}
-      <Scene />
+      <div id="gl" aria-hidden="true">
+        <Canvas camera={{ position: ZONES.beranda.pos, fov: 55 }} dpr={[1, 1.6]} gl={{ antialias: true, alpha: false }}>
+          <color attach="background" args={['#0a0c10']} />
+          <fog attach="fog" args={['#0a0c10', 22, 70]} />
+          <Sky />
+          <Planet pos={[10, 7, -18]} scale={1.1} />
+          <Planet pos={[-12, 9, -26]} scale={0.6} color="#c2410c" speed={0.2} />
+          <Planet pos={[-9, -6, -30]} scale={0.5} color="#58a6ff" speed={0.28} />
+          {Array.from({ length: 22 }, (_, i) => <Shard key={i} i={i} />)}
+          <GridFloor />
+          <Core />
+          <Paths />
+          {Object.keys(ZONES).map((id) => (
+            <Station key={id} zone={id} active={arrived === id} onFly={() => setZone(id)} />
+          ))}
+          {projectObjs.map((p) => (
+            <ProjectObject key={p.id} project={p} onInspect={setProject} />
+          ))}
+          <Beacon />
+          <CameraRig zone={zone} onArrive={setArrived} />
+          <Bridge />
+          {booted && <Panels arrived={arrived} project={project} setProject={setProject} setZone={setZone} />}
+        </Canvas>
+      </div>
+      <div className="gesture" ref={gestureRef} style={{ opacity: booted ? 1 : 0 }} />
       <div className="crt" />
       <div className="vignette" />
       <Cursor />
       <Hud />
-      <Nav />
-
-      <main style={{ opacity: booted ? 1 : 0, transition: 'opacity 0.8s ease' }}>
-        {/* ============ BERANDA ============ */}
-        <section id="beranda">
-          <div className="wrap">
-            <div className="kicker">system online · portfolio v3.0 · 3d</div>
-            <h1 className="big">
-              ARIF<br />
-              <span style={{ color: 'var(--green)' }}>RENGGY</span>
-              <span style={{ color: 'var(--terra)' }}>.exe</span>
-            </h1>
-            <p className="lede" style={{ margin: '26px 0 34px' }}>
-              {PROFILE.tagline} Situs ini dibangun dengan React Three Fiber — jelajahi dengan scroll.
-            </p>
-            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-              <a className="btn" href="#proyek">LIHAT PROYEK →</a>
-              <a className="btn ghost" href={PROFILE.github} target="_blank" rel="noreferrer">GITHUB</a>
-            </div>
-            <div className="stat-row">
-              <div className="stat"><b>4+</b><span>Proyek Utama</span></div>
-              <div className="stat"><b>3D</b><span>Rendering</span></div>
-              <div className="stat"><b>100%</b><span>Hand-coded</span></div>
-            </div>
-          </div>
-        </section>
-
-        {/* ============ TENTANG ============ */}
-        <section id="tentang">
-          <div className="wrap grid2" style={{ alignItems: 'center', gap: 34 }}>
-            <Reveal>
-              <div className="kicker">tentang</div>
-              <h2>Developer dari ujung timur Indonesia.</h2>
-              <p className="lede">
-                Mahasiswa Teknik Informatika UKWMS Waingapu yang membangun sistem nyata untuk
-                masyarakat sekitarnya — monitoring bencana real-time untuk Sumba Timur,
-                website komersial untuk klien spa di Bali, hingga game edukasi anak SD.
-                Terbiasa bekerja dengan data live, peta interaktif, dan jaringan yang lambat.
-              </p>
-              <div className="stat-row" style={{ marginTop: 22 }}>
-                <div className="stat"><b>{PROFILE.location.split('—')[0].trim()}</b><span>Lokasi</span></div>
-              </div>
-            </Reveal>
-            <Reveal delay={0.15}><TerminalCard /></Reveal>
-          </div>
-        </section>
-
-        {/* ============ KEAHLIAN ============ */}
-        <section id="keahlian">
-          <div className="wrap">
-            <Reveal>
-              <div className="kicker">keahlian</div>
-              <h2>Arsenal <span style={{ color: 'var(--green)' }}>/</span> loadout.</h2>
-            </Reveal>
-            <div className="grid2" style={{ marginTop: 26 }}>
-              {PROFILE.skills.map((s, i) => (
-                <Reveal key={s.group} delay={i * 0.1}>
-                  <div className="skill-card">
-                    <h3>{s.group}</h3>
-                    <div className="chips">
-                      {s.items.map((it) => <span className="chip" key={it}>{it}</span>)}
-                    </div>
-                  </div>
-                </Reveal>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ============ PROYEK ============ */}
-        <section id="proyek">
-          <div className="wrap">
-            <Reveal>
-              <div className="kicker">misi selesai</div>
-              <h2>Proyek pilihan <span style={{ color: 'var(--green)' }}>::</span> quest log.</h2>
-            </Reveal>
-            <div style={{ marginTop: 28 }}>
-              {PROFILE.projects.map((p, i) => (
-                <Reveal key={p.id} delay={i * 0.08}>
-                  <div className="proj" style={{ '--pa': p.accent }}>
-                    <div className="glow" />
-                    <div className="id">[{p.id}] {p.kind}</div>
-                    <h3>{p.title}</h3>
-                    <p>{p.desc}</p>
-                    <div className="chips">
-                      {p.stack.map((s) => <span className="chip" key={s}>{s}</span>)}
-                    </div>
-                  </div>
-                </Reveal>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ============ KONTAK ============ */}
-        <section id="kontak">
-          <div className="wrap" style={{ textAlign: 'center' }}>
-            <Reveal>
-              <div className="kicker" style={{ textAlign: 'center' }}>misi berikutnya</div>
-              <h2 style={{ fontSize: 'clamp(30px, 6vw, 64px)' }}>
-                Ayo bangun sesuatu<br />yang berguna.
-              </h2>
-              <p className="lede" style={{ margin: '18px auto 34px' }}>
-                Terbuka untuk proyek web, kolaborasi, dan tawaran kerja.
-              </p>
-              <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
-                <a className="btn" href={PROFILE.github} target="_blank" rel="noreferrer">GITHUB / ARIFRENGGY</a>
-                {PROFILE.email && <a className="btn ghost" href={`mailto:${PROFILE.email}`}>EMAIL</a>}
-              </div>
-            </Reveal>
-          </div>
-        </section>
-      </main>
-
-      <footer className="foot">
-        © 2026 {PROFILE.name} — dibangun dengan React Three Fiber · {''}
-        <a href={PROFILE.github} target="_blank" rel="noreferrer">source</a>
-      </footer>
+      <div className="labels">
+        {Object.values(ZONES).map((z) => (
+          <button
+            key={z.id}
+            ref={(el) => { labelRefs.current[z.id] = el; }}
+            className={'zone-label' + (arrived === z.id ? ' here' : '')}
+            style={{ '--zc': z.color }}
+            onClick={() => setZone(z.id)}
+          >
+            [{z.label}]
+          </button>
+        ))}
+      </div>
+      <nav className="nav">
+        {NAV.map(([id, label]) => (
+          <button key={id} className={zone === id ? 'active' : ''} onClick={() => setZone(id)}>{label}</button>
+        ))}
+      </nav>
+      {hint && <div className="hint">GESER: lihat sekeliling · TAP: interaksi · NAV: pindah stasiun</div>}
     </>
   );
 }
