@@ -1,0 +1,5 @@
+node_modules
+dist
+qa.mjs
+qa2.mjs
+shot-*.png
